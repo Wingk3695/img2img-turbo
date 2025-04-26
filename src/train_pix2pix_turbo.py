@@ -21,7 +21,8 @@ import wandb
 from cleanfid.fid import get_folder_features, build_feature_extractor, fid_from_feats
 
 from pix2pix_turbo import Pix2Pix_Turbo
-from my_utils.training_utils import parse_args_paired_training, PairedDataset
+from my_utils.training_utils import parse_args_paired_training
+from FoggyDataset import PairedMultiDataset as PairedDataset
 
 
 def main(args):
@@ -158,7 +159,7 @@ def main(args):
             out_pil = transforms.Resize(args.resolution, interpolation=transforms.InterpolationMode.LANCZOS)(x_pil)
             return np.array(out_pil)
 
-        ref_stats = get_folder_features(os.path.join(args.dataset_folder, "test_B"), model=feat_model, num_workers=0, num=None,
+        ref_stats = get_folder_features(os.path.join(args.dataset_folder, "test_B"), model=feat_model, num_workers=0, num=50,
                 shuffle=False, seed=0, batch_size=8, device=torch.device("cuda"),
                 mode="clean", custom_image_tranform=fn_transform, description="", verbose=True)
 
@@ -289,7 +290,7 @@ def main(args):
                                 outf = os.path.join(args.output_dir, "eval", f"fid_{global_step}", f"val_{step}.png")
                                 output_pil.save(outf)
                         if args.track_val_fid:
-                            curr_stats = get_folder_features(os.path.join(args.output_dir, "eval", f"fid_{global_step}"), model=feat_model, num_workers=0, num=None,
+                            curr_stats = get_folder_features(os.path.join(args.output_dir, "eval", f"fid_{global_step}"), model=feat_model, num_workers=0, num=50,
                                     shuffle=False, seed=0, batch_size=8, device=torch.device("cuda"),
                                     mode="clean", custom_image_tranform=fn_transform, description="", verbose=True)
                             fid_score = fid_from_feats(ref_stats, curr_stats)
