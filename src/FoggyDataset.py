@@ -1,24 +1,11 @@
 import os
-import random
-import argparse
-import json
 import torch
 from PIL import Image
 from torchvision import transforms
 import torchvision.transforms.functional as F
-from glob import glob
-
+import json
 
 def build_transform(image_prep):
-    """
-    Constructs a transformation pipeline based on the specified image preparation method.
-
-    Parameters:
-    - image_prep (str): A string describing the desired image preparation
-
-    Returns:
-    - torchvision.transforms.Compose: A composable sequence of transformations to be applied to images.
-    """
     if image_prep == "resized_crop_512":
         T = transforms.Compose([
             transforms.Resize(512, interpolation=transforms.InterpolationMode.LANCZOS),
@@ -40,13 +27,15 @@ def build_transform(image_prep):
         ])
     elif image_prep == "no_resize":
         T = transforms.Lambda(lambda x: x)
+    else:
+        raise ValueError(f"Unknown image_prep: {image_prep}")
     return T
 
 class PairedMultiDataset(torch.utils.data.Dataset):
     def __init__(self, dataset_folder, split, image_prep, tokenizer):
         super().__init__()
         self.dataset_folder = dataset_folder
-        prompts_file = os.path.join(dataset_folder, f"{split}_prompts.json")
+        prompts_file = os.path.join(dataset_folder, f"{split}_prompts_with_depth.json")
         with open(prompts_file, "r", encoding="utf-8") as f:
             self.data = json.load(f)
         
@@ -60,12 +49,12 @@ class PairedMultiDataset(torch.utils.data.Dataset):
         item = self.data[idx]
         conditioning_path = item.get("A_path") or item.get("conditioning_image")
         image_path = item.get("B_path") or item.get("image")
+        depth_path = item.get("depth_path")  # 新增深度图路径字段
         caption = item["text"]
 
         if conditioning_path is None or image_path is None:
             raise ValueError(f"路径数据缺失: {item}")
 
-        # 拼接为绝对路径（如果是相对路径）
         if not os.path.isabs(conditioning_path):
             conditioning_path = os.path.join(self.dataset_folder, conditioning_path)
         if not os.path.isabs(image_path):
@@ -81,6 +70,20 @@ class PairedMultiDataset(torch.utils.data.Dataset):
         output_t = F.to_tensor(output_t)
         output_t = F.normalize(output_t, mean=[0.5]*3, std=[0.5]*3)
 
+        # 处理深度图，允许没有depth_path时返回None或全零tensor
+        if depth_path is not None:
+            if not os.path.isabs(depth_path):
+                depth_path = os.path.join(self.dataset_folder, depth_path)
+            depth_img = Image.open(depth_path).convert("L")  # 灰度
+            # 转成RGB三通道（复制三次）
+            depth_img = Image.merge("RGB", (depth_img, depth_img, depth_img))
+            depth_t = self.T(depth_img)
+            depth_t = F.to_tensor(depth_t)
+            # 归一化到[0,1]，没有归一化到[-1,1]，按需调整
+        else:
+            # 如果没有depth，返回全零tensor，shape和conditioning_t一样
+            depth_t = torch.zeros_like(conditioning_t)
+
         input_ids = self.tokenizer(
             caption,
             max_length=self.tokenizer.model_max_length,
@@ -92,7 +95,7 @@ class PairedMultiDataset(torch.utils.data.Dataset):
         return {
             "output_pixel_values": output_t,
             "conditioning_pixel_values": conditioning_t,
+            "depth_pixel_values": depth_t,
             "caption": caption,
             "input_ids": input_ids,
         }
-
