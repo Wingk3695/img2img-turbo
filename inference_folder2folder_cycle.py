@@ -17,7 +17,8 @@ def main(
     direction=None,
     image_prep="resize_512x512",
     use_fp16=False,
-    device="cuda"
+    device="cuda",
+    max_images=None  # 新增参数
 ):
     os.makedirs(output_folder, exist_ok=True)
     model = CycleGAN_Turbo(pretrained_name=model_name, pretrained_path=model_path)
@@ -34,6 +35,9 @@ def main(
     for ext in exts:
         files.extend(glob.glob(os.path.join(input_folder, ext)))
     files = sorted(files)
+
+    if max_images is not None:
+        files = files[:max_images]  # 限制数量
 
     times = []
     for file in tqdm(files, desc="Processing images"):
@@ -70,6 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--direction", type=str, default=None, help="翻译方向，a2b或b2a，自定义模型权重必填")
     parser.add_argument("--image_prep", type=str, default="resize_512x512", help="图片预处理方法")
     parser.add_argument("--use_fp16", action="store_true", help="是否使用fp16加速")
+    parser.add_argument("--max_images", type=int, default=None, help="最多处理前N张图片")  # 新增参数
     args = parser.parse_args()
 
     if (args.model_name is None) == (args.model_path is None):
@@ -91,5 +96,6 @@ if __name__ == "__main__":
         direction=args.direction,
         image_prep=args.image_prep,
         use_fp16=args.use_fp16,
-        device="cuda" if torch.cuda.is_available() else "cpu"
+        device="cuda" if torch.cuda.is_available() else "cpu",
+        max_images=args.max_images  # 新增参数
     )

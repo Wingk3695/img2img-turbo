@@ -2,6 +2,7 @@ import gradio as gr
 from PIL import Image
 import torch
 import torchvision.transforms.functional as F
+import torchvision.transforms as transforms
 import numpy as np
 import os
 from src.pix2pix_turbo import Pix2Pix_Turbo
